@@ -1,0 +1,96 @@
+{
+    "$schema": "http://json-schema.org/draft-06/schema#",
+    "$ref": "#/definitions/Welcome3",
+    "definitions": {
+        "Welcome3": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "clientId": {
+                    "type": "integer"
+                },
+                "orderId": {
+                    "type": "integer"
+                },
+                "orderValue": {
+                    "type": "number"
+                },
+                "deliveryAddress": {
+                    "$ref": "#/definitions/DeliveryAddress"
+                },
+                "products": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/Product"
+                    }
+                }
+            },
+            "required": [
+                "clientId",
+                "deliveryAddress",
+                "orderValue",
+                "products"
+            ],
+            "title": "Welcome3"
+        },
+        "DeliveryAddress": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "zipCode": {
+                    "type": "string"
+                },
+                "street": {
+                    "type": "string"
+                },
+                "number": {
+                    "type": "string",
+                    "format": "integer"
+                },
+                "district": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "city",
+                "district",
+                "number",
+                "state",
+                "street",
+                "zipCode"
+            ],
+            "title": "DeliveryAddress"
+        },
+        "Product": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "unitValue": {
+                    "type": "number"
+                },
+                "unit": {
+                    "type": "integer"
+                },
+                "totalValue": {
+                    "type": "number"
+                }
+            },
+            "required": [
+                "id",
+                "totalValue",
+                "unit",
+                "unitValue"
+            ],
+            "title": "Product"
+        }
+    }
+}

@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:jms="http://www.mulesoft.org/schema/mule/jms"
+	xmlns:sockets="http://www.mulesoft.org/schema/mule/sockets" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/sockets http://www.mulesoft.org/schema/mule/sockets/current/mule-sockets.xsd
+http://www.mulesoft.org/schema/mule/jms http://www.mulesoft.org/schema/mule/jms/current/mule-jms.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<sockets:listener-config name="Sockets_Listener_config" doc:name="Sockets Listener config" doc:id="e9e4bff6-f74a-4e8f-86bf-5426c06deabc" >
+		<sockets:tcp-listener-connection host="http://localhost" port="8099" />
+	</sockets:listener-config>
+	<http:listener-config name="HTTP_Localhost_Listener_config" doc:name="HTTP Listener config" doc:id="13286763-e58d-4ac0-990b-00e0fa59e056" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<db:config name="localhost_mysql_connection" doc:name="Database Config" doc:id="74a6da84-224f-47de-a8cd-75f0a4c8710f" >
+		<db:my-sql-connection host="localhost" port="3306" user="develop" password="developer!123" database="test" />
+	</db:config>
+	<jms:config name="JMS_ActiveMQ_localhost_config" doc:name="JMS Config" doc:id="287fc8a0-199e-4169-9a94-ac5d7997e798" >
+		<jms:active-mq-connection username="admin" password="admin" >
+			<jms:factory-configuration brokerUrl="tcp://localhost:61616" />
+		</jms:active-mq-connection>
+	</jms:config>
+	<flow name="orderFlow" doc:id="14be988f-0a60-4a16-bd54-865eac176295" >
+		<http:listener doc:name="order" doc:id="2fb040e3-22e2-4388-bc17-54477d520719" config-ref="HTTP_Localhost_Listener_config" path="/orders" allowedMethods="POST">
+			<http:response statusCode="201" />
+		</http:listener>
+		<set-variable value="#[payload]" doc:name="Set Variable" doc:id="49066d69-fb10-448c-bd00-337c2401ae9d" variableName="order_request"/>
+		<flow-ref doc:name="Insert_order_flow" doc:id="9e3db5f4-e82a-4660-a988-8408261e956b" name="insertOrderFlow"/>
+		<ee:transform doc:name="Transform Message" doc:id="e3e97b4c-22be-4e95-87c1-83c2d5eb8be8">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	clientId: vars.order_request.clientId,
+	orderId: payload,
+	deliveryAddress: vars.order_request.deliveryAddress,
+	orderValue: vars.order_request.orderValue,
+	products: vars.order_request.products map ( product , indexOfProduct ) -> {
+		totalValue: product.totalValue,
+		unit: product.unit,
+		id: product.id,
+		unitValue: product.unitValue
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="Insert_product_flow" doc:id="e3ff6d42-e692-42cf-a858-9d347c9db2d0" name="insertProductFlow"/>
+		<flow-ref doc:name="Insert_delivery_address_flow" doc:id="ebee733c-b14b-48e6-88c4-bb9aee2425ba" name="insertAddressFlow" targetValue="#[vars.order_request]"/>
+		<ee:transform doc:name="Transform Message to publish Queue" doc:id="48e3b5fc-6d42-4184-afe8-123b51856a70" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	clientId: vars.order_request.clientId,
+	orderId: vars.orderId,
+	deliveryAddress: vars.order_request.deliveryAddress,
+	orderValue: vars.order_request.orderValue,
+	products: vars.order_request.products map ( product , indexOfProduct ) -> {
+		totalValue: product.totalValue,
+		unit: product.unit,
+		id: product.id,
+		unitValue: product.unitValue
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<jms:publish doc:name="Publish To Financeiro" doc:id="2d4235a4-6c3d-486e-bac3-3a0c1cb8235f" config-ref="JMS_ActiveMQ_localhost_config" destination="FINANCEIRO_INPUT_QUEUE">
+		</jms:publish>
+		<ee:transform doc:name="Transform Message to response" doc:id="e1faeb71-4ac1-4045-88e7-de20eff28b95">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+var orderId=vars.orderId default 0
+---
+{
+	orderId: orderId,
+	orderLink: "/orders/" ++ orderId,
+	productsOrderLink: "/orders/" ++ orderId ++ "/products",
+	addressOrderLink: "/orders/" ++ orderId ++ "/deliveryAddresses"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="insertOrderFlow" doc:id="a96ed3fe-f8f5-4b27-b977-b166d8c57243" >
+		<http:listener doc:name="Listener" doc:id="0d9a4ccd-852a-413e-bb01-da986480d062" config-ref="HTTP_Localhost_Listener_config" path="/orders_te" allowedMethods="POST"/>
+		<db:insert doc:name="Insert" doc:id="713555b9-2446-4009-916b-0e81b6f8b378" config-ref="localhost_mysql_connection" autoGenerateKeys="true">
+			<db:sql ><![CDATA[insert into test.pedido (valor_total, id_cliente, data_compra) values(:ORDER_VALUE, :CLIENT_ID, SYSDATE())]]></db:sql>
+			<db:input-parameters ><![CDATA[#[output application/java
+---
+{
+	ORDER_VALUE: payload.orderValue as Number,
+	CLIENT_ID: payload.clientId as Number
+}]]]></db:input-parameters>
+		</db:insert>
+		<ee:transform doc:name="Transform Message" doc:id="c516121f-96f1-4ac2-810e-af819b44428e" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[payload.generatedKeys.GENERATED_KEY]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="#[payload]" doc:name="Set Variable" doc:id="1ef62c47-666a-4d21-a845-1ed85e72a0a2" variableName="orderId"/>
+	</flow>
+	<flow name="insertProductFlow" doc:id="830b5451-0969-4cc2-8d90-d26b20d7f9db" >
+		<http:listener doc:name="Listener" doc:id="d57d275c-3a68-4558-909a-63eb9da08c56" config-ref="HTTP_Localhost_Listener_config" path="/products" allowedMethods="POST"/>
+		<foreach doc:name="For Each product" doc:id="835a2dab-6c8d-4fbb-ace8-10d66647dd5a" collection="#[vars.order_request.products]">
+			<db:insert doc:name="Insert" doc:id="568a0ee2-b972-4277-b52d-64136966dddf" config-ref="localhost_mysql_connection">
+				<db:sql ><![CDATA[insert into test.pedido_produto (id_pedido, id_produto, valor_unitario, quantidade, valor_total)
+values (:ID_PEDIDO, :ID_PRODUTO, :VALOR_UNIT, :QTDE, :VALOR_TOTAL);]]></db:sql>
+				<db:input-parameters ><![CDATA[#[output application/java
+---
+{
+	ID_PRODUTO: vars.order_request.products[vars.counter - 1].id as Number,
+	QTDE: vars.order_request.products[vars.counter - 1].unit as Number,
+	ID_PEDIDO: vars.orderId as Number,
+	VALOR_UNIT: vars.order_request.products[vars.counter - 1].unitValue as Number,
+	VALOR_TOTAL: vars.order_request.products[vars.counter - 1].totalValue as Number
+}]]]></db:input-parameters>
+			</db:insert>
+		</foreach>
+	</flow>
+	<flow name="insertAddressFlow" doc:id="5e75b17d-3d98-4b29-918c-ffe95635bd20" >
+		<http:listener doc:name="Listener" doc:id="8d5bfef6-983f-4e43-bda7-108419f41de7" config-ref="HTTP_Localhost_Listener_config" path="/address"/>
+		<db:insert doc:name="Insert" doc:id="74d9d602-dbe4-456e-8bd8-ba978368e41e" config-ref="localhost_mysql_connection">
+			<db:sql ><![CDATA[insert into test.pedido_endereco(id_pedido, cep, rua, numero, complemento, bairro, cidade, estado)
+values (:ID_PEDIDO, :CEP, :RUA, :NUMERO, :COMPLEMENTO, :BAIRRO, :CIDADE, :ESTADO)]]></db:sql>
+			<db:input-parameters ><![CDATA[#[output application/java
+---
+{
+	ESTADO: payload.deliveryAddress.state,
+	BAIRRO: payload.deliveryAddress.district,
+	NUMERO: payload.deliveryAddress.number,
+	ID_PEDIDO: payload.orderId as Number,
+	CIDADE: payload.deliveryAddress.city,
+	CEP: payload.deliveryAddress.zipCode,
+	RUA: payload.deliveryAddress.street,
+	COMPLEMENTO: ''
+}]]]></db:input-parameters>
+		</db:insert>
+	</flow>
+</mule>
