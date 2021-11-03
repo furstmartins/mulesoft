@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:request-config name="HTTP_Request_localhost_configuration" doc:name="HTTP Request configuration" doc:id="ef839145-1817-4983-a574-48374d36b9bd">
+		<http:request-connection host="localhost" port="8081" />
+	</http:request-config>
+	<flow name="teste2Flow" doc:id="fcf596bd-8488-4313-a92d-95573b1311fa" >
+		<http:listener doc:name="Listener" doc:id="2061ce32-ded5-4c0b-a607-32278360448b" config-ref="HTTP_Localhost_Listener_config" path="/orders/{idOrder}" allowedMethods="GET"/>
+		<set-variable value="#[attributes.uriParams.idOrder]" doc:name="Set Variable" doc:id="813f7942-4c4a-4af5-b8a1-58def3a3a134" variableName="idOrder"/>
+		<db:query-single doc:name="Query single Pedido" doc:id="66c2fee3-5517-4430-875c-f2dd261cce29" config-ref="localhost_mysql_connection">
+			<db:sql ><![CDATA[select p.id_pedido, p.id_cliente, p.valor_total, p.data_compra
+from test.pedido p
+where p.id_pedido = :ID_PEDIDO]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	ID_PEDIDO: attributes.uriParams.idOrder
+}]]]></db:input-parameters>
+		</db:query-single>
+		<ee:transform doc:name="Transform Message" doc:id="9c3858c8-130d-4f5c-94d3-9fa4a694d296">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	clientId: payload.id_cliente default 0,
+	orderId: payload.id_pedido,
+	orderValue: payload.valor_total default 0
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="#[payload]" doc:name="Set Variable - payload response" doc:id="00d69440-53ea-4600-a171-65c16a8fecca" variableName="payloadResponse"/>
+		<http:request method="GET" doc:name="Request Product" doc:id="9ae8bd22-441c-42c4-8e37-43f73b2ec327" config-ref="HTTP_Request_localhost_configuration" path="/orders/{idOrder}/products">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	idOrder : vars.idOrder
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="b3923e13-e154-4749-b98f-720457c4e03b">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+	clientId: vars.payloadResponse.clientId,
+	orderId: vars.payloadResponse.orderId,
+	orderValue: vars.payloadResponse.orderValue,
+	products: payload map ( payload01 , indexOfPayload01 ) -> {
+		totalValue: payload01.totalValue default 0,
+		unit: payload01.unit default 0,
+		id: payload01.id default 0,
+		unitValue: payload01.unitValue default 0
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="#[payload]" doc:name="Update Variable - payload response" doc:id="191d8232-d486-4842-a74a-86437132d1f6" variableName="payloadResponse"/>
+		<http:request method="GET" doc:name="Request Delivery Address" doc:id="60981fa6-72ab-49b8-9acc-6267d8ead888" config-ref="HTTP_Request_localhost_configuration" path="/orders/{idOrder}/deliveryAddresses">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	idOrder : vars.idOrder
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="e838681a-c938-4391-8a02-60d30d7ab73b" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	clientId: vars.payloadResponse.clientId,
+	orderId: vars.payloadResponse.orderId,
+	deliveryAddress: {
+		zipCode: payload.zipCode default "",
+		number: payload.number default "",
+		city: payload.city default "",
+		street: payload.street default "",
+		district: payload.district default "",
+		state: payload.state default ""
+	},
+	orderValue: vars.payloadResponse.orderValue,
+	products: vars.payloadResponse.products map ( product , indexOfProduct ) -> {
+		totalValue: product.totalValue,
+		unit: product.unit,
+		id: product.id,
+		unitValue: product.unitValue
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="getProductFlow" doc:id="76c1e6fc-6437-456c-b6b5-17b9a4663ddc" >
+		<http:listener doc:name="Listener" doc:id="8eaf71f0-b550-46a5-8760-387bf5cb3ea3" config-ref="HTTP_Localhost_Listener_config" path="/orders/{idOrder}/products" allowedMethods="GET"/>
+		<db:select doc:name="Select Product by Order" doc:id="f47c8137-4cbe-4f2e-8c6b-837e655565d6" config-ref="localhost_mysql_connection">
+			<db:sql ><![CDATA[select pp.id_produto, pp.valor_unitario as valor_unitario_produto, pp.quantidade, pp.valor_total as valor_total_produto
+from test.pedido_produto pp
+where pp.id_pedido = :ID_PEDIDO]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	ID_PEDIDO: attributes.uriParams.idOrder
+}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="4d3fcdfc-0388-40ac-b66e-34746db56473" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload map ( payload01 , indexOfPayload01 ) -> {
+	totalValue: payload01.valor_total_produto default 0,
+	unit: payload01.quantidade default 0,
+	id: payload01.id_produto,
+	unitValue: payload01.valor_unitario_produto default 0
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="getDeliveryAddress" doc:id="5a949ce7-ef0f-46e8-bebc-a5576b15adfd" >
+		<http:listener doc:name="Listener" doc:id="ae9d4236-00a2-4a2d-ab47-e81cc5a17bdb" config-ref="HTTP_Localhost_Listener_config" path="/orders/{idOrder}/deliveryAddresses" allowedMethods="GET"/>
+		<db:query-single doc:name="Select Delivery Address by Order" doc:id="77340e8e-84d0-4013-84d1-aefa6bcb664a" config-ref="localhost_mysql_connection">
+			<db:sql ><![CDATA[select pe.cep, pe.rua, pe.numero, pe.complemento, pe.bairro, pe.cidade, pe.estado
+from test.pedido_endereco pe
+where pe.id_pedido = :ID_PEDIDO]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	ID_PEDIDO: attributes.uriParams.idOrder
+}]]]></db:input-parameters>
+		</db:query-single>
+		<ee:transform doc:name="Transform Message" doc:id="da197f7d-abfa-4508-b4b5-45aaaaa2f47b" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	zipCode: payload.cep,
+	number: payload.numero,
+	city: payload.cidade,
+	street: payload.rua,
+	district: payload.bairro,
+	state: payload.estado
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>

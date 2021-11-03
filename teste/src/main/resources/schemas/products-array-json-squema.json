@@ -1,0 +1,28 @@
+{
+    "$schema": "http://json-schema.org/draft-06/schema#",
+    "type": "array",
+    "items": {
+        "$ref": "#/definitions/productArray"
+    },
+    "definitions": {
+        "productArray": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "unit": {
+                    "type": "integer"
+                },
+                "unitValue": {
+                    "type": "integer"
+                },
+                "totalValue": {
+                    "type": "integer"
+                }
+            },
+            "title": "productArray"
+        }
+    }
+}

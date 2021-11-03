@@ -1,0 +1,32 @@
+{
+    "$schema": "http://json-schema.org/draft-06/schema#",
+    "$ref": "#/definitions/deliveryAddress",
+    "definitions": {
+        "deliveryAddress": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "zipCode": {
+                    "type": "string"
+                },
+                "number": {
+                    "type": "string",
+                    "format": "integer"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "street": {
+                    "type": "string"
+                },
+                "district": {
+                    "type": "string"
+                },
+                "state": {
+                    "type": "string"
+                }
+            },
+            "title": "deliveryAddress"
+        }
+    }
+}

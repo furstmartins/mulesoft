@@ -1,0 +1,35 @@
+{
+    "$schema": "http://json-schema.org/draft-06/schema#",
+    "$ref": "#/definitions/product",
+    "definitions": {
+        "product": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "idOrder": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "unitValue": {
+                    "type": "number"
+                },
+                "unit": {
+                    "type": "integer"
+                },
+                "totalValue": {
+                    "type": "number"
+                }
+            },
+            "required": [
+                "id",
+                "idOrder",
+                "totalValue",
+                "unit",
+                "unitValue"
+            ],
+            "title": "product"
+        }
+    }
+}
